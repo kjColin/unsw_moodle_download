@@ -31,6 +31,14 @@ STREAMS = [
     ('camera', 's2_av.m3u8'),
 ]
 
+# Pre-recorded items (COMP6714's "Pre-recorded Topic Lectures") are a single
+# screen recording, published as one combined track instead of the pair above.
+# Without this fallback they look streamless and get filed as no_m3u8 — 13 of
+# COMP6714's 22 recordings were lost that way.
+SINGLE_STREAM = ('single', 's1_av.m3u8')
+
+STREAM_LABELS = {'slides': 'PPT', 'camera': 'Camera', 'single': 'AV'}
+
 def slug(s: str) -> str:
     s = re.sub(r'\s+', ' ', s or '').strip()
     s = re.sub(r'[^A-Za-z0-9._()\- ]+', '_', s)
@@ -89,6 +97,38 @@ async def get_ua_and_cookies(ctx):
     cookie_header = '; '.join(f"{c['name']}={c['value']}" for c in cookies if c['name'] in COOKIE_NAMES)
     return ua, cookie_header
 
+async def expand_groups(page):
+    """Some sections file their recordings in collapsible groups (COMP6714 keeps
+    "Live Lecture Recordings" and "Pre-recorded Topic Lectures"). Collapsed, the
+    only .class-row elements are the group headers themselves — clicking one as
+    if it were a lesson yields NO_M3U8 and the whole section looks empty. Each
+    group header carries a button.opener; opening them all reveals the lessons.
+    Groups come back collapsed on every page load, so this runs after each goto.
+    """
+    openers = page.locator('button.opener')
+    try:
+        n = await openers.count()
+    except Exception:
+        return 0
+    opened = 0
+    for i in range(n):
+        try:
+            if (await openers.nth(i).get_attribute('aria-expanded')) == 'false':
+                await openers.nth(i).click(timeout=10000)
+                await page.wait_for_timeout(2000)
+                opened += 1
+        except Exception as e:
+            print(f'OPENER_FAIL {i} {str(e)[:60]}')
+    if opened:
+        await page.wait_for_timeout(2500)
+    return opened
+
+
+def lesson_rows(page):
+    """Lesson rows only — group headers share the .class-row class."""
+    return page.locator('.class-row:not(.group)')
+
+
 async def collect_rows(section_url):
     async with async_playwright() as p:
         browser = await p.chromium.connect_over_cdp(CDP)
@@ -96,7 +136,10 @@ async def collect_rows(section_url):
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         await page.goto(section_url, wait_until='domcontentloaded', timeout=60000)
         await page.wait_for_timeout(3500)
-        rows = page.locator('.class-row')
+        n_opened = await expand_groups(page)
+        if n_opened:
+            print(f'EXPANDED_GROUPS {n_opened}')
+        rows = lesson_rows(page)
         count = await rows.count()
         out = []
         for i in range(count):
@@ -120,11 +163,20 @@ async def capture_lesson(section_url, index):
         page.on('request', on_req)
         await page.goto(section_url, wait_until='domcontentloaded', timeout=60000)
         await page.wait_for_timeout(3500)
-        row = page.locator('.class-row').nth(index)
+        await expand_groups(page)
+        row = lesson_rows(page).nth(index)
         title = re.sub(r'\s+', ' ', (await row.text_content() or '')).strip()
         aria = await row.get_attribute('aria-label') or ''
         await row.click(timeout=15000)
-        await page.wait_for_timeout(9000)
+        # Poll instead of a flat wait: dual-stream lectures emit their m3u8
+        # within a couple of seconds, while pre-recorded items can take past
+        # the old fixed 9s and were being written off as streamless. Give up
+        # at 24s so a genuinely empty lesson still ends the loop.
+        for _ in range(16):
+            await page.wait_for_timeout(1500)
+            if reqs:
+                break
+        await page.wait_for_timeout(2500)  # let the second track follow the first
         lesson_url = page.url
         ua, cookie_header = await get_ua_and_cookies(ctx)
         await browser.close()
@@ -137,6 +189,11 @@ async def capture_lesson(section_url, index):
     streams = {}
     for tag, suffix in STREAMS:
         streams[tag] = next((u for u in uniq if suffix in u), None)
+    if not any(streams.values()):
+        tag, suffix = SINGLE_STREAM
+        single = next((u for u in uniq if suffix in u), None)
+        if single:
+            streams[tag] = single
     dedup_key = None
     m = re.search(r'/lesson/([^/]+)/classroom', lesson_url)
     if m:
@@ -215,10 +272,13 @@ def main():
             })
             continue
 
-        for tag, _suffix in STREAMS:
+        # Iterate the tracks this lesson actually has, so a single-track
+        # recording isn't reported as two missing ones.
+        for tag in [t for t, _ in STREAMS] + [SINGLE_STREAM[0]]:
             m3u8 = streams.get(tag)
             if not m3u8:
-                print(f'NO_STREAM[{tag}]', row['index'])
+                if tag in streams:
+                    print(f'NO_STREAM[{tag}]', row['index'])
                 continue
 
             stream_key = f'{base_dedup_key}::{tag}'
@@ -229,7 +289,7 @@ def main():
                 print('SKIP_EXISTING', stream_key)
                 continue
 
-            label = 'PPT' if tag == 'slides' else 'Camera'
+            label = STREAM_LABELS[tag]
             filename = slug(meta['title']) + f' ({label}).mp4'
             out_path = out_dir / filename
             upsert_item({
