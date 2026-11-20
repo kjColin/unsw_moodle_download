@@ -1,0 +1,147 @@
+{
+  "default": {
+    "include": [
+      "week",
+      "lecture",
+      "tutorial",
+      "lab",
+      "introduction",
+      "overview",
+      "machine learning",
+      "neural",
+      "search",
+      "design",
+      "regression",
+      "classification"
+    ],
+    "exclude": [
+      "rubric",
+      "marking",
+      "solution",
+      "sample",
+      "example",
+      "template",
+      "transcript",
+      "faq",
+      "outline",
+      "contract",
+      "dataset",
+      "guide",
+      "references",
+      "book"
+    ]
+  },
+  "COMP9414": {
+    "include": [
+      "week",
+      "tutorial",
+      "search",
+      "neural",
+      "machine learning",
+      "history of ai",
+      "agents"
+    ],
+    "exclude": [
+      "solution",
+      "dataset",
+      "code for students"
+    ]
+  },
+  "COMP9417": {
+    "include": [
+      "week",
+      "tutorial",
+      "regression",
+      "classification",
+      "naive",
+      "linear algebra"
+    ],
+    "exclude": [
+      "solution",
+      "questions",
+      "dataset"
+    ]
+  },
+  "COMP9511": {
+    "include": [
+      "week",
+      "lecture",
+      "tutorial",
+      "design",
+      "visual",
+      "accessibility",
+      "interaction"
+    ],
+    "exclude": [
+      "rubric",
+      "final group presentations",
+      "reference book"
+    ]
+  },
+  "GSOE9011": {
+    "include": [
+      "week",
+      "literature",
+      "research proposal",
+      "tutorial"
+    ],
+    "exclude": [
+      "transcript",
+      "example",
+      "template",
+      "contract",
+      "participant information"
+    ]
+  },
+  "COMP9900": {
+    "include": [
+      "week",
+      "lecture",
+      "slides",
+      "workshop"
+    ],
+    "exclude": [
+      "outline",
+      "timetable",
+      "guide",
+      "specification",
+      "rubric",
+      "marking",
+      "template"
+    ]
+  },
+  "COMP4418": {
+    "include": [
+      "week",
+      "lecture",
+      "slides",
+      "logic",
+      "tutorial",
+      "reasoning",
+      "knowledge",
+      "intro"
+    ],
+    "exclude": [
+      "solution",
+      "outline",
+      "sample"
+    ]
+  },
+  "COMP6714": {
+    "include": [
+      "week",
+      "lecture",
+      "slides",
+      "tutorial",
+      "retrieval",
+      "index",
+      "ranking",
+      "search"
+    ],
+    "exclude": [
+      "solution",
+      "outline",
+      "dataset"
+    ]
+  }
+}

@@ -1,12 +1,28 @@
-# UNSW Moodle → 百度网盘 视频迁移流水线
+# UNSW Moodle → 百度网盘 + Google Drive 视频迁移流水线
 
-Echo360 课程录播（双流：PPT + 摄像头）批量下载 → 上传百度网盘 → 校验 → 删除本地，
+Echo360 课程录播（双流：PPT + 摄像头）批量下载 → **同时上传百度网盘和 Google Drive** →
+两边各自校验 → 只有两边都通过才删除本地，
 下载与上传可并发运行（registry 用 flock 互斥 + 原子写保证一致性）。
 
-## 状态（2026-07-07）
+## 双传规则（2026-11-19 起）
 
-全部 10 门课已完成：332 个视频（166 节课 × 双流）全部下载、上传、本地清理完毕。
-网盘路径：`/Unsw/{课程代码}/Lectures/`。
+- 任一边上传或校验失败 → **保留本地文件**，下一轮重试。绝不在只成功一边时删本地。
+- Drive remote 未配置时上传器直接退出（rc=2），`run_upload_loop.sh` 随之中止，
+  避免只传百度、攒下一堆永远清不掉的本地文件。
+- registry 新增字段：`gdrive_uploaded`、`gdrive_status`、`gdrive_dir`。
+  旧条目没有 `gdrive_uploaded`，按规则不可删——本地还在的会被补传 Drive。
+- Drive 路径：`UNSW-Backup/{课程代码}/Lectures/`（remote 名 `gdrive`），百度路径不变。
+- 校验：百度查远端 ls 列表命中文件名；Drive 用 `rclone lsjson` 比对字节数，必须完全相等。
+- `test_upload_gates.py` 锁住上述删除/待办规则：`python3 -m unittest test_upload_gates`
+
+## 状态
+
+- 2026-07-07：T1/T2 全部 10 门课完成：332 个视频（166 节课 × 双流）已传百度并清理本地。
+  百度路径 `/Unsw/{课程代码}/Lectures/`。**这批本地副本已删，没有 Drive 备份**；
+  要补传 Drive 只能从百度下回来再传（88 GB，单文件逐个周转），尚未做。
+- 2026-11-19：加入 Drive 双传。待办范围 = 2026 T3 的 COMP9900 / COMP4418 / COMP6714，
+  这三门课的 Echo360 section UUID 尚未录入（需登录 Moodle 后抓取）。
+- registry 中另有 36 条 `no_m3u8 / not_ready`：Echo360 未生成录播流，重跑也拿不到。
 
 ## 脚本
 
@@ -27,11 +43,20 @@ Echo360 课程录播（双流：PPT + 摄像头）批量下载 → 上传百度�
 
 ## 依赖
 
-- 已登录 Moodle/Echo360 的 Chromium，开着 CDP 端口 9222（`/home/colin/start_openclaw_browser.sh`）
+- 已登录 Moodle/Echo360 的 Chromium，开着 CDP 端口 9222（`launch_browser_detached.py`，见下文"浏览器"一节）
 - `ffmpeg`、`playwright`（Python）、`/home/colin/.local/bin/BaiduPCS-Go`（已登录）
 
 ## 已知 Echo360 Section UUID
 
+2026 T3（2026-11-21 抓取，录播条数为当时 Echo360 显示值）：
+```
+COMP6714  8602d36d-5b27-4e87-8d5a-2a5803ee7456   (22 条)
+COMP4418  fa63bd95-15ff-4ebd-9460-73f433a3aaff   (18 条)
+COMP9900  bd200f55-0ffe-44f6-9301-1cd7ebd96b2f   (9 条, Moodle 上课名为 COMP3900/COMP9900)
+```
+注：`cc1cb01e-d2e7-448e-b9b7-ed07be727f2a` 是 COMP9511 的 2026T1 另一 section(1PGB)，非 T3。
+
+T1/T2：
 ```
 COMP9511  d614c1c2-b29d-454d-b0c8-51858f2b59ce
 COMP9417  4e8ce04c-07d9-4291-9800-d296cb842f11
@@ -45,6 +70,16 @@ COMP9020  3e3079ad-1e24-440b-ba6c-3bb372021509 (A) / 3e49b136-2536-4356-bf11-b6d
 COMP9021  662dd9c9-015f-4180-a3ce-97befd152f2a (Tue) / 43b5321d-05d4-4472-ba3a-580f8fe83992 (Thu)
 ```
 Section 主页 URL 格式：`https://echo360.net.au/section/<UUID>/home`
+
+## 怎么找新学期的 Section UUID
+
+**别走 Moodle 的 LTI 链接**：`mod/lti/view.php` 页面不含 Echo360 地址，加 `forceview=1`
+也不会在页面或 iframe 里暴露 section UUID，也不开新标签页，这条路试过，走不通。
+
+直接用已登录的 CDP 浏览器打开 `https://echo360.net.au/courses`，页面会列出全部
+`https://echo360.net.au/section/<UUID>/home` 链接。课程名不要从课程列表页的 DOM 上溯去取
+（父元素会抓到整个网格的文本，导致每一行都误判成同一门课），而是逐个打开
+`/section/<UUID>/home`，读页面里的 `h1`/courseName，那里有准确的课程代码和学期。
 
 ## 补新课/新周录播的用法
 
