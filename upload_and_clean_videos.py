@@ -13,6 +13,11 @@ REMOTE_BASE = '/Unsw'
 RCLONE_BIN = 'rclone'
 GDRIVE_REMOTE = 'gdrive'
 GDRIVE_BASE = 'UNSW-Backup'
+# Drive groups by term as well as course; Baidu deliberately does not (its 400+
+# existing files would all have to be moved). Courses missing from the map land
+# in Unsorted rather than failing the upload.
+COURSE_TERMS = Path('/home/colin/video_pipeline/course_terms.json')
+UNKNOWN_TERM = 'Unsorted'
 # Drive accepts the file but may still be settling; sizes must match exactly.
 SIZE_TOLERANCE = 0
 
@@ -52,8 +57,14 @@ def update_item(dedup_key, **fields):
 def remote_dir_for(course_name):
     return f'{REMOTE_BASE}/{course_name}/Lectures'
 
+def term_for(course_name):
+    try:
+        return json.loads(COURSE_TERMS.read_text(encoding='utf-8')).get(course_name) or UNKNOWN_TERM
+    except Exception:
+        return UNKNOWN_TERM
+
 def gdrive_dir_for(course_name):
-    return f'{GDRIVE_BASE}/{course_name}/Lectures'
+    return f'{GDRIVE_BASE}/{term_for(course_name)}/{course_name}/Lectures'
 
 def needs_work(it):
     """True while this item still owes an upload to either remote."""

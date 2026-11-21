@@ -1,0 +1,19 @@
+{
+  "_comment": "课程 -> 学期，用于 Google Drive 的目录分层 UNSW-Backup/<学期>/<课程>/Lectures。来源：Moodle 选课列表里的课程全名（如 'COMP4418 - Knowledge Representation - 2026 T3'）。新学期加课时在这里补一行；缺失的课会落到 Unsorted。",
+  "COMP9020": "2025T1",
+  "COMP9021": "2025T1",
+  "COMP9311": "2025T1",
+  "COMP2041": "2025T2",
+  "COMP9024": "2025T2",
+  "COMP3331": "2025T2",
+  "COMP9517": "2025T3",
+  "GSOE9820": "2025T3",
+  "COMP6080": "2025T3",
+  "COMP9414": "2026T1",
+  "COMP9417": "2026T1",
+  "COMP9511": "2026T1",
+  "GSOE9011": "2026T1",
+  "COMP4418": "2026T3",
+  "COMP6714": "2026T3",
+  "COMP9900": "2026T3"
+}
