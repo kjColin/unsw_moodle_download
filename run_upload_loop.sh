@@ -28,7 +28,10 @@ while true; do
   fi
 
   rescan_alive=0
-  pgrep -f 'python3 echo360_batch_download.py' > /dev/null && rescan_alive=1
+  # 只匹配脚本名：下载器常以 `python3 -u ...` 启动，带上解释器参数的模式会漏掉它，
+  # 循环就会在文件还没下完时以为"没有下载器、队列为空"而提前退出。
+  # [d] 让 pgrep 不匹配到自己这条命令行。
+  pgrep -f 'echo360_batch_[d]ownload\.py' > /dev/null && rescan_alive=1
 
   # Pending means "owes either remote" — same rule the uploader uses.
   pending=$(python3 - <<'EOF'

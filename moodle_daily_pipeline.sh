@@ -86,10 +86,23 @@ PY
   fi
 
   echo "[$TS] Step3: Summarize only NEW Lectures/Tutorials (bilingual)"
-  if python3 "$REPO/summarize_new_pdfs_bilingual.py"; then
+  # As colin, like the steps around it. Run as root, this created root-owned
+  # directories under /home/colin/Unsw/Summaries that colin's processes then
+  # could not write into. It only needs pdftotext; nothing here wants root.
+  if su - colin -c "python3 $REPO/summarize_new_pdfs_bilingual.py"; then
     echo "[$TS] Incremental bilingual summary done"
   else
     echo "[$TS] WARN: incremental bilingual summary failed"
+  fi
+
+  # After Step3 so the day's new summaries go up with the slides they summarise.
+  # As colin: the rclone and Baidu logins live in colin's home, and running as
+  # root would leave the registry root-owned and unwritable for colin's runs.
+  echo "[$TS] Step3b: Back up materials + summaries to Baidu and Google Drive"
+  if su - colin -c "python3 $REPO/upload_moodle_resources.py"; then
+    echo "[$TS] materials backup done"
+  else
+    echo "[$TS] WARN: materials backup incomplete; unfinished files retry next run"
   fi
 
   echo "[$TS] Step4: Notify assignment updates / due-date changes / 48h reminders"

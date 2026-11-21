@@ -42,6 +42,30 @@ Echo360 课程录播（双流：PPT + 摄像头）批量下载 → **同时上�
 - **百度网盘**：`/Unsw/<课程>/Lectures/`，不分学期。两边结构不同是有意的——
   百度上已有 400+ 个历史文件，重组收益不大。
 
+## 课件与总结
+
+`upload_moodle_resources.py` 把 `/home/colin/Unsw` 下所有课程的课件和双语总结双传到
+百度（`/Unsw/<相对路径>`，布局不变）和 Drive（`UNSW-Backup/<学期>/<课程>/...`，总结放在
+`<课程>/Summaries/` 下，跟着它总结的课件走）。每日流水线 Step3b 会自动调用它。
+
+- **课程从目录自动发现**，不写死列表——写死的列表正是 T3 课件从没上传过的原因。
+- **不删本地副本**。课件下载器按"本地文件是否存在"决定要不要下载，旧版传完百度就删本地，
+  结果每天都把同一批课件重新下载一遍。课件一学期才几十 MB，留着没成本；该删的是视频。
+- `restore_resources_from_baidu.py`：把只在百度上、本地已删的课件按原路径取回，之后上传器
+  会只补 Drive。百度对这个账号限速约 0.2 MB/s，课件量小无所谓。
+- 账本：`/home/colin/moodle_resource_registry.json`（按本地路径为键，字段 `uploaded`/`gdrive_uploaded`）。
+
+## 只在百度的视频补到 Drive
+
+`run_gdrive_mirror.sh`：**从 Echo360 重抓而不是从百度下载**——百度非会员实测 0.23 MB/s
+（88 GB 约 4 天半），Echo360 约 13 MB/s（约 2 小时）。下载器的 `baidu_state_for()` 把旧行的
+"已在百度"状态继承给新下载的行，上传器据此跳过百度、只传 Drive；2026-11-21 补齐 332 个，
+百度上的文件修改时间未变，证明没有重传。双流改造前的老条目把摄像头流存在不带 `::camera`
+的键下，重抓时也继承其百度状态，老条目标记 `superseded_by`。
+
+"完成"的定义是**两端都有**（`uploaded and gdrive_uploaded`），所以以后任何一边缺了，重扫都会补上。
+`test_mirror_rules.py` 锁住这些规则。
+
 ## 账本里"未下载"条目的含义
 
 - `no_media_confirmed`：确实没有录播（如 Flexibility Week、无流的占位视频），无需再试

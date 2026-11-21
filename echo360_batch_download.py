@@ -78,11 +78,47 @@ def upsert_item(item):
         courses[cname]['items'].append(key)
     save_reg(data)
 
+def find_item(course_name, dedup_key):
+    for item in load_reg().get('items', []):
+        if item.get('dedup_key') == dedup_key and item.get('course_name') == course_name:
+            return item
+    return None
+
+# Notes a human (or a reclassification pass) settled on. A rescan that again
+# finds no stream must leave them alone rather than reverting to plain no_m3u8.
+SETTLED_NOTES = {
+    'no_media_confirmed',
+    'superseded_single_stream_fix',
+    'stale_section_home_artifact',
+    'group_header_artifact',
+}
+
+def keep_existing_classification(course_name, dedup_key):
+    item = find_item(course_name, dedup_key)
+    return bool(item) and item.get('note') in SETTLED_NOTES
+
+def baidu_state_for(course_name, stream_key, base_key, tag):
+    """(already on Baidu?, its remote_dir) for a stream about to be fetched.
+
+    Re-fetching a recording just to mirror it to Drive must not upload it to
+    Baidu a second time, so the new row inherits the old one's Baidu state.
+    Rows from before dual-stream downloads stored the camera track under the
+    bare lesson key, so for the camera track that key counts too.
+    """
+    prior = find_item(course_name, stream_key)
+    if not (prior and prior.get('uploaded')) and tag == 'camera':
+        prior = find_item(course_name, base_key)
+    if prior and prior.get('uploaded'):
+        return True, prior.get('remote_dir')
+    return False, None
+
 def is_done_or_pending(course_name, dedup_key):
     data = load_reg()
     for item in data.get('items', []):
         if item.get('dedup_key') == dedup_key and item.get('course_name') == course_name:
-            if item.get('uploaded'):
+            # Done means on both remotes. Baidu alone no longer counts, which is
+            # what lets a rescan pick up recordings that predate the Drive copy.
+            if item.get('uploaded') and item.get('gdrive_uploaded'):
                 return True
             if item.get('downloaded') and item.get('upload_status') in {'pending', 'uploading'}:
                 return True
@@ -259,6 +295,13 @@ def main():
 
         if not any(streams.values()):
             print('NO_M3U8', row['index'], meta['lesson_url'])
+            if keep_existing_classification(course_name, base_dedup_key):
+                continue
+            prior = find_item(course_name, base_dedup_key)
+            if prior and prior.get('uploaded'):
+                # Echo360 no longer serves it, but the Baidu copy is real; keep
+                # the record of it rather than overwriting with uploaded=False.
+                continue
             upsert_item({
                 'dedup_key': base_dedup_key,
                 'course_name': course_name,
@@ -292,6 +335,20 @@ def main():
             label = STREAM_LABELS[tag]
             filename = slug(meta['title']) + f' ({label}).mp4'
             out_path = out_dir / filename
+            on_baidu, baidu_dir = baidu_state_for(course_name, stream_key, base_dedup_key, tag)
+            if on_baidu:
+                print('MIRROR_TO_GDRIVE', stream_key)
+            baidu_fields = {
+                'uploaded': on_baidu,
+                'upload_status': 'done' if on_baidu else 'pending',
+            }
+            if on_baidu and baidu_dir:
+                baidu_fields['remote_dir'] = baidu_dir
+            if on_baidu and tag == 'camera' and not find_item(course_name, stream_key):
+                # The legacy bare-key row is replaced by this ::camera row; mark it
+                # so it stops reading as a recording missing from Drive.
+                upsert_item({'dedup_key': base_dedup_key, 'course_name': course_name,
+                             'superseded_by': stream_key})
             upsert_item({
                 'dedup_key': stream_key,
                 'course_name': course_name,
@@ -302,8 +359,7 @@ def main():
                 'm3u8': m3u8,
                 'local_path': str(out_path),
                 'downloaded': False,
-                'uploaded': False,
-                'upload_status': 'pending',
+                **baidu_fields,
                 'note': 'queued',
             })
             wait_for_disk_space()
@@ -320,8 +376,7 @@ def main():
                     'local_path': str(out_path),
                     'size_bytes': out_path.stat().st_size,
                     'downloaded': True,
-                    'uploaded': False,
-                    'upload_status': 'pending',
+                    **baidu_fields,
                     'note': 'downloaded',
                 })
                 print('DOWNLOADED', out_path)
@@ -336,8 +391,9 @@ def main():
                     'm3u8': m3u8,
                     'local_path': str(out_path),
                     'downloaded': False,
-                    'uploaded': False,
-                    'upload_status': 'failed',
+                    # A failed fetch says nothing about the Baidu copy.
+                    'uploaded': on_baidu,
+                    'upload_status': 'done' if on_baidu else 'failed',
                     'note': f'ffmpeg_rc_{rc}',
                 })
                 print('DOWNLOAD_FAILED', out_path, rc)
