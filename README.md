@@ -35,6 +35,21 @@ Echo360 课程录播（双流：PPT + 摄像头）批量下载 → **同时上�
 | `moodle_resource_download.py` | 配套：下载 Moodle 课程资料（PDF 等）到 /home/colin/Unsw/ |
 | `upload_moodle_resources.py` | 配套：课程资料上传网盘并清理本地（独立 registry：moodle_resource_registry.json） |
 
+## 网盘目录结构
+
+- **Google Drive**：`UNSW-Backup/<学期>/<课程>/Lectures/`，学期映射见 `course_terms.json`
+  （新学期加课补一行；未映射的课落到 `Unsorted`，不会导致上传失败）。
+- **百度网盘**：`/Unsw/<课程>/Lectures/`，不分学期。两边结构不同是有意的——
+  百度上已有 400+ 个历史文件，重组收益不大。
+
+## 账本里"未下载"条目的含义
+
+- `no_media_confirmed`：确实没有录播（如 Flexibility Week、无流的占位视频），无需再试
+- `superseded_single_stream_fix`：早期失败的尝试，同一节课已在 `::single` 键下抓到
+- `stale_section_home_artifact`：失败运行把 section 首页当成课程记下的残留，不代表缺口
+
+查缺口不要直接数"未下载"条数——按 lesson UUID 聚合，看该节课是否至少有一路流已下载。
+
 ## 数据文件（不在本目录，勿删）
 
 - `/home/colin/video_sync_registry.json` — 视频总账（每个视频的下载/上传/清理状态）
