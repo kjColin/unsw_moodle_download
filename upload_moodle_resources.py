@@ -42,7 +42,7 @@ UPLOAD_EXTS = {
     ".zip", ".tar", ".gz", ".7z",
     ".ipynb",
     ".csv", ".xlsx", ".xls",
-    ".txt", ".md",
+    ".txt", ".md", ".html",
     ".py",
 }
 SKIP_DIRS = {".venv", "venv", "site-packages", "__pycache__", ".git", "node_modules"}

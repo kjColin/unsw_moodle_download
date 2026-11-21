@@ -29,11 +29,12 @@ Echo360 课程录播（双流：PPT + 摄像头）批量下载 → **同时上�
 | 脚本 | 作用 |
 |---|---|
 | `echo360_batch_download.py` | 核心下载器。用法：`python3 echo360_batch_download.py <课程> <SECTION_URL> <输出目录>`。通过 CDP (127.0.0.1:9222) 连已登录浏览器，抓取每节课的 s1_v(PPT)/s2_av(摄像头) m3u8，ffmpeg 下载为独立 mp4。磁盘剩余 <8GB 自动暂停。已下载/已上传的自动跳过（幂等，可随时重跑补漏） |
-| `upload_and_clean_videos.py` | 上传器。扫 registry 中 downloaded 且未 uploaded 的文件，BaiduPCS-Go 上传 → 远端校验 → 删本地 → 记录日志。单批处理后退出 |
+| `upload_and_clean_videos.py` | 上传器。扫 registry 中已下载、但还缺百度或 Drive 任一端的文件，补传缺的那端并校验，两端都通过才删本地。单批处理后退出 |
 | `run_upload_loop.sh` | 循环跑上传器，直到无下载进程且无待上传文件时自动退出 |
 | `run_new_courses_rescan.sh` | 批量重扫示例：按课程/section 顺序串行调下载器（共享一个浏览器标签页，不能并行）。上传循环可同时运行 |
 | `moodle_resource_download.py` | 配套：下载 Moodle 课程资料（PDF 等）到 /home/colin/Unsw/ |
-| `upload_moodle_resources.py` | 配套：课程资料上传网盘并清理本地（独立 registry：moodle_resource_registry.json） |
+| `upload_moodle_resources.py` | 配套：课程资料与总结双传百度 + Drive，保留本地（独立 registry：moodle_resource_registry.json） |
+| `webcms_download.py` | 配套：下载 WebCMS3 上的课件（COMP6714）到 /home/colin/Unsw/，见下文“WebCMS3 课件” |
 
 ## 网盘目录结构
 
@@ -54,6 +55,19 @@ Echo360 课程录播（双流：PPT + 摄像头）批量下载 → **同时上�
 - `restore_resources_from_baidu.py`：把只在百度上、本地已删的课件按原路径取回，之后上传器
   会只补 Drive。百度对这个账号限速约 0.2 MB/s，课件量小无所谓。
 - 账本：`/home/colin/moodle_resource_registry.json`（按本地路径为键，字段 `uploaded`/`gdrive_uploaded`）。
+
+### WebCMS3 课件（COMP6714）
+
+COMP6714 的课件不在 Moodle 上，放在 WebCMS3。`webcms_download.py` 用同一个 9222 浏览器
+（WebCMS 对未登录请求返回 403，需要在那个浏览器里登录过）把它们下载到
+`/home/colin/Unsw/<课程>/<分类>/`，再由上面的上传器双传。每日流水线 Step2b 会调用它。
+新学期要换的是脚本顶部 `COURSES` 里的 offering 和各分类的资源列表 id。
+
+- 资源页上的上传文件（`/files/<hash>/attachment`）：原样保存，用链接文字作为文件名。
+- 内嵌的 cse.unsw.edu.au 页面（例如 Project 规格）：保存为 `.html`。
+- GitHub 仓库链接（Exercises）：打包成 `<仓库名>-<sha7>.zip`。文件名带 sha，仓库更新后会作为新文件下载。
+- 只指回 Moodle 的页面（Lecture Videos、Moodle 上的作业）：没有可抓的内容，录播走 Echo360。
+- `/home/colin/webcms_manifest.json` 记录每个文件 hash 对应的本地路径，所以不会重复下载；同名但内容不同的文件会加后缀，不会互相覆盖。
 
 ## 只在百度的视频补到 Drive
 
@@ -79,6 +93,7 @@ Echo360 课程录播（双流：PPT + 摄像头）批量下载 → **同时上�
 - `/home/colin/video_sync_registry.json` — 视频总账（每个视频的下载/上传/清理状态）
 - `/home/colin/video_sync_registry.lock` — flock 锁文件（下载器与上传器共用）
 - `/home/colin/moodle_resource_registry.json` / `.lock` — 课程资料账本
+- `/home/colin/webcms_manifest.json` — WebCMS 文件 hash 到本地路径的映射
 
 ## 依赖
 

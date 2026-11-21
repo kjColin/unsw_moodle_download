@@ -85,6 +85,14 @@ PY
     echo "[$TS] WARN: file extraction failed"
   fi
 
+  # COMP6714 keeps its slides on WebCMS3, not Moodle. Same logged-in browser.
+  echo "[$TS] Step2b: Fetch NEW files from WebCMS3"
+  if su - colin -c "python3 $REPO/webcms_download.py"; then
+    echo "[$TS] webcms download done"
+  else
+    echo "[$TS] WARN: webcms download failed (WebCMS login expired?)"
+  fi
+
   echo "[$TS] Step3: Summarize only NEW Lectures/Tutorials (bilingual)"
   # As colin, like the steps around it. Run as root, this created root-owned
   # directories under /home/colin/Unsw/Summaries that colin's processes then
